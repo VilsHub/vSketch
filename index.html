@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sketchpad — canvas drawing app</title>
+<script>
+  // set the theme before first paint to avoid a light-theme flash
+  document.documentElement.dataset.theme =
+    localStorage.getItem('sketchpad:theme') ||
+    (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+</script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="logo">✏️ Sketchpad <span id="doc-name"></span></div>
+
+    <div id="toolbar">
+      <button class="tool active" data-tool="select" title="Select / move (V)">➤</button>
+      <button class="tool" data-tool="pan"     title="Pan / hand (H)">✋&#xFE0E;</button>
+      <button class="tool" data-tool="rect"    title="Rectangle (R)">▭</button>
+      <button class="tool" data-tool="ellipse" title="Ellipse (O)">◯</button>
+      <button class="tool" data-tool="diamond" title="Diamond (D)">◇</button>
+      <button class="tool" data-tool="line"    title="Line (L)">─</button>
+      <button class="tool" data-tool="arrow"   title="Arrow (A)">→</button>
+      <button class="tool" data-tool="pen"     title="Freehand pen (P)">✎</button>
+      <button class="tool" data-tool="text"    title="Text (T)">T</button>
+      <button class="tool" data-tool="icon"    title="Font icon — load a .ttf first">☆</button>
+    </div>
+
+    <div id="actions">
+      <button id="btn-load-ttf" title="Load an icon font (.ttf / .otf)">Load icon TTF</button>
+      <button id="btn-drawings" title="Browse saved drawings">Drawings</button>
+      <button id="btn-quicksave" title="Save to the drawings folder (Ctrl+S)">Save</button>
+      <button id="btn-eraser" title="Import the preview image of an eraser.io share link (needs server.js)">Eraser link</button>
+      <button id="btn-image" title="Insert an image from disk (or paste / drag one onto the canvas)">Image</button>
+      <button id="btn-open"  title="Import a .json drawing from disk">Import</button>
+      <button id="btn-save"  title="Download drawing as .json (embeds the icon font)">Export</button>
+      <button id="btn-export" title="Export the drawing as a PNG image">PNG</button>
+      <button id="btn-clear" title="Delete everything">Clear</button>
+      <button id="btn-theme" title="Toggle dark / light theme">🌙</button>
+    </div>
+  </header>
+
+  <div id="main">
+    <aside id="sidebar">
+      <section class="panel" id="props">
+        <h3>Style</h3>
+        <label>Stroke
+          <input type="color" id="prop-stroke" value="#1f2937">
+        </label>
+        <label>Fill
+          <span class="fill-row">
+            <input type="checkbox" id="prop-fill-on">
+            <input type="color" id="prop-fill" value="#dbeafe" disabled>
+          </span>
+        </label>
+        <label>Stroke width
+          <input type="range" id="prop-width" min="1" max="12" value="2">
+        </label>
+        <label>Font size
+          <input type="range" id="prop-fontsize" min="10" max="96" value="28">
+        </label>
+      </section>
+
+      <section class="panel hidden" id="icon-panel">
+        <h3>Icons <span id="icon-count"></span></h3>
+        <input type="search" id="icon-search" placeholder="filter by hex, e.g. f0">
+        <div id="icon-grid"></div>
+      </section>
+    </aside>
+
+    <div id="canvas-wrap">
+      <canvas id="canvas"></canvas>
+      <div id="hint">Scroll = zoom · Space/middle-drag = pan · Double-click = text · Del = delete · Ctrl+Z = undo</div>
+    </div>
+  </div>
+
+  <div id="zoombar">
+    <button id="zoom-out">−</button>
+    <button id="zoom-reset">100%</button>
+    <button id="zoom-in">+</button>
+  </div>
+
+  <div id="gallery" class="overlay hidden">
+    <div class="dialog">
+      <div class="dialog-head">
+        <h2>Drawings</h2>
+        <span id="store-mode" class="badge"></span>
+        <button id="gallery-close" title="Close">×</button>
+      </div>
+      <div class="save-row">
+        <input id="drawing-name" placeholder="drawing name…" maxlength="40">
+        <button id="btn-save-as">Save current</button>
+      </div>
+      <div id="drawing-list"></div>
+    </div>
+  </div>
+
+  <div id="export-dialog" class="overlay hidden">
+    <div class="dialog" id="export-box">
+      <div class="dialog-head">
+        <h2>Export PNG</h2>
+        <button id="export-close" title="Close">×</button>
+      </div>
+      <div class="export-body">
+        <span class="export-label">Background</span>
+        <div class="bg-options">
+          <button class="bg-swatch bg-checker" data-bg="transparent" title="Transparent"></button>
+          <button class="bg-swatch" data-bg="#ffffff" style="background:#ffffff" title="White"></button>
+          <button class="bg-swatch" data-bg="#000000" style="background:#000000" title="Black"></button>
+          <label class="bg-swatch bg-custom" title="Custom color">
+            <input type="color" id="export-bg-custom" value="#f3f4f6">
+          </label>
+        </div>
+        <button id="export-confirm">Export</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="file-ttf"  accept=".ttf,.otf" hidden>
+  <input type="file" id="file-open" accept=".json"     hidden>
+  <input type="file" id="file-image" accept="image/*"  hidden>
+</div>
+
+<script src="ttf.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
