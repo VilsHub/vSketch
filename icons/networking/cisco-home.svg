@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   version="1.0"
+   width="100"
+   height="100"
+   id="svg5"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg" viewBox="-0.72 -0.00 33.04 33.04">
+  <defs
+     id="defs1">
+    <pattern
+       id="EMFhbasepattern"
+       patternUnits="userSpaceOnUse"
+       width="6"
+       height="6"
+       x="0"
+       y="0" />
+  </defs>
+  <path
+     style="fill:#ffffff;fill-opacity:1;fill-rule:nonzero;stroke:#005073;stroke-width:1.03999px;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:10;stroke-dasharray:none;stroke-opacity:1"
+     d="M 2.559981,9.4399301 H 18.95986 V 24.719817 H 2.559981 Z"
+     id="path1" />
+  <path
+     style="fill:#005073;fill-opacity:1;fill-rule:nonzero;stroke:none"
+     d="M 21.519841,10.79992 10.79992,0 6.7199502,3.9999704 V 1.5999881 H 3.5999733 V 7.1999467 L 0,10.79992 Z"
+     id="path2" />
+  <path
+     style="fill:#ffffff;fill-opacity:1;fill-rule:nonzero;stroke:none"
+     d="m 13.199902,16.559877 h 16.399879 c 1.119991,0 1.999985,0.879994 1.999985,1.999986 v 9.35993 c 0,1.119992 -0.879994,1.999985 -1.999985,1.999985 H 13.199902 c -1.039992,0 -1.999985,-0.879993 -1.999985,-1.999985 v -9.35993 c 0,-1.119992 0.959993,-1.999986 1.999985,-1.999986 z"
+     id="path3" />
+  <path
+     style="fill:#005073;fill-opacity:1;fill-rule:nonzero;stroke:none"
+     d="m 13.599899,18.639862 h 15.519885 v 9.119932 H 13.599899 Z"
+     id="path4" />
+  <path
+     style="fill:#005073;fill-opacity:1;fill-rule:nonzero;stroke:none"
+     d="M 29.599781,16.559877 H 13.199902 c -1.039992,0 -1.999985,0.879994 -1.999985,1.999986 v 9.35993 c 0,1.119992 0.959993,1.999985 1.999985,1.999985 h 6.479952 v 1.35999 h -2.799979 c -1.279991,-0.159999 -1.279991,1.839987 0,1.759987 h 9.119932 c 1.279991,0.08 1.279991,-1.919986 0,-1.759987 h -2.479981 v -1.35999 h 6.079955 c 1.119991,0 1.999985,-0.879993 1.999985,-1.999985 v -9.35993 c 0,-1.119992 -0.879994,-1.999986 -1.999985,-1.999986 z m 1.039992,11.359916 c 0,0.559996 -0.479996,0.959993 -1.039992,0.959993 H 13.199902 c -0.559996,0 -0.959993,-0.399997 -0.959993,-0.959993 v -9.35993 c 0,-0.559996 0.399997,-1.039993 0.959993,-1.039993 h 16.399879 c 0.559996,0 1.039992,0.479997 1.039992,1.039993 z"
+     id="path5" />
+</svg>

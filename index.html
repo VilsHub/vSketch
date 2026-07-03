@@ -32,12 +32,14 @@
       <button class="tool" data-tool="pen"     title="Freehand pen (P)">✎</button>
       <button class="tool" data-tool="text"    title="Text (T)">T</button>
       <button class="tool" data-tool="icon"    title="Font icon — load a .ttf first">☆</button>
+      <button class="tool" data-tool="svgicon" title="Place icon — stock SVG library (I)">☁&#xFE0E;</button>
     </div>
 
     <div id="actions">
       <button id="btn-load-ttf" title="Load an icon font (.ttf / .otf) — add its IcoMoon selection.json to search icons by name">Load icon TTF</button>
       <button id="btn-drawings" title="Browse saved drawings">Drawings</button>
       <button id="btn-quicksave" title="Save to the drawings folder (Ctrl+S)">Save</button>
+      <button id="btn-saveas" title="Save under a new name (Ctrl+Shift+S)">Save As</button>
       <button id="btn-eraser" title="Import the preview image of an eraser.io share link (needs server.js)">Eraser link</button>
       <button id="btn-image" title="Insert an image from disk (or paste / drag one onto the canvas)">Image</button>
       <button id="btn-open"  title="Import a .json drawing from disk">Import</button>
@@ -86,6 +88,14 @@
           (add its IcoMoon selection.json to search by name).</p>
         <input type="search" id="icon-search" placeholder="filter by name or hex">
         <div id="icon-grid"></div>
+      </section>
+
+      <section class="panel hidden" id="svgicon-panel">
+        <h3>Icon library <span id="svgicon-count"></span></h3>
+        <p id="svgicon-empty" class="icon-empty hidden"></p>
+        <select id="svgicon-category" class="hidden"></select>
+        <input type="search" id="svgicon-search" class="hidden" placeholder="filter by name">
+        <div id="svgicon-grid" class="hidden"></div>
       </section>
     </aside>
 

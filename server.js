@@ -68,6 +68,23 @@ const server = http.createServer((req, res) => {
     return send(res, 200, JSON.stringify(items));
   }
 
+  // ------------------------------------------------------- icon library
+  // Enumerates ./icons/<category>/<name>.svg for the "place icon" panel;
+  // the SVG files themselves are served by the static handler below.
+  if (url.pathname === '/api/icons' && req.method === 'GET') {
+    const dir = path.join(ROOT, 'icons');
+    const out = {};
+    if (fs.existsSync(dir)) {
+      for (const cat of fs.readdirSync(dir).sort()) {
+        const d = path.join(dir, cat);
+        if (!fs.statSync(d).isDirectory()) continue;
+        const files = fs.readdirSync(d).filter(f => f.endsWith('.svg')).sort();
+        if (files.length) out[cat] = files;
+      }
+    }
+    return send(res, 200, JSON.stringify(out));
+  }
+
   // --------------------------------------------------- eraser.io import
   // Accepts a share link, extracts the workspace id, and fetches only from
   // the fixed app.eraser.io host — the client never controls the target

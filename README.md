@@ -54,6 +54,7 @@ automatically (the badge in the Drawings dialog shows which one is active).
 |---|---|
 | V H R O D L A P T | select / pan / rect / ellipse / diamond / line / arrow / pen / text |
 | Ctrl+S | save to the drawings gallery |
+| Ctrl+Shift+S | save as — save under a new name |
 | Delete | delete selection |
 | Ctrl+Z / Ctrl+Shift+Z | undo / redo |
 | Ctrl+D | duplicate |

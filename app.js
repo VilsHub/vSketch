@@ -354,9 +354,11 @@ function drawElement(c, el) {
       const b = normBox(el.x, el.y, el.w, el.h);
       const img = getImage(el.dataUrl);
       if (img.complete && img.naturalWidth) {
-        if (c === ctx && isDarkTheme()) {
+        if (c === ctx && isDarkTheme() && !el.mono) {
           // pre-invert so the dark-theme CSS inversion on #canvas-wrap
-          // cancels out and photos keep their real colors on screen
+          // cancels out and photos keep their real colors on screen.
+          // Mono icons skip this: they carry stroke-like colors and should
+          // theme-flip along with drawn shapes (black turns white).
           c.save();
           c.filter = 'invert(100%) hue-rotate(180deg)';
           c.drawImage(img, b.x, b.y, b.w, b.h);
@@ -730,6 +732,22 @@ canvas.addEventListener('pointerdown', e => {
     return;
   }
 
+  if (tool === 'svgicon') {
+    if (!currentSvgIcon) return; // panel hint guides the user
+    pushHistory();
+    const w = Math.max(32, style.fontSize * 2);
+    const h = w * currentSvgIcon.ratio;
+    const el = {
+      id: nextId++, type: 'image',
+      x: p.x - w / 2, y: p.y - h / 2, w, h,
+      dataUrl: currentSvgIcon.dataUrl,
+    };
+    if (currentSvgIcon.mono) el.mono = true; // black icon — Fill color retints it
+    elements.push(el);
+    render();
+    return;
+  }
+
   // shape tools: rect / ellipse / diamond / triangle / pentagon / hexagon / star / line / arrow
   pushHistory();
   let el;
@@ -1009,7 +1027,7 @@ window.addEventListener('keydown', e => {
 
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
     e.preventDefault();
-    quickSave();
+    e.shiftKey ? saveAs() : quickSave();
     return;
   }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
@@ -1073,7 +1091,7 @@ window.addEventListener('keydown', e => {
   const shortcuts = {
     v: 'select', h: 'pan', r: 'rect', o: 'ellipse', d: 'diamond',
     '3': 'triangle', '5': 'pentagon', '6': 'hexagon', s: 'star',
-    l: 'line', a: 'arrow', p: 'pen', t: 'text',
+    l: 'line', a: 'arrow', p: 'pen', t: 'text', i: 'svgicon',
   };
   const t = shortcuts[e.key.toLowerCase()];
   if (t && !e.ctrlKey && !e.metaKey) setTool(t);
@@ -1090,6 +1108,7 @@ function setTool(t) {
   document.querySelectorAll('#toolbar .tool').forEach(btn =>
     btn.classList.toggle('active', btn.dataset.tool === t));
   updateIconPanel();
+  updateSvgIconPanel();
   if (hoverAnchor) { hoverAnchor = null; render(); }
 }
 
@@ -1128,11 +1147,18 @@ document.getElementById('prop-fill-on').addEventListener('change', e => {
   const colorInput = document.getElementById('prop-fill');
   colorInput.disabled = !e.target.checked;
   style.fill = e.target.checked ? colorInput.value : 'transparent';
-  applyStyleToSelection(el => { if ('fill' in el) el.fill = style.fill; });
+  applyStyleToSelection(el => {
+    if ('fill' in el) el.fill = style.fill;
+    // mono icons go back to their default black when fill is switched off
+    else if (el.mono) retintImageEl(el, style.fill === 'transparent' ? '#000000' : style.fill);
+  });
 });
 document.getElementById('prop-fill').addEventListener('input', e => {
   style.fill = e.target.value;
-  applyStyleToSelection(el => { if ('fill' in el) el.fill = style.fill; });
+  applyStyleToSelection(el => {
+    if ('fill' in el) el.fill = style.fill;
+    else if (el.mono) retintImageEl(el, style.fill);
+  });
 });
 document.querySelectorAll('.line-style').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -1309,6 +1335,153 @@ function base64ToBuffer(b64) {
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return bytes.buffer;
 }
+
+// -------------------------------------------------------- SVG icon library
+//
+// Stock icons live in ./icons/<category>/<name>.svg; server.js lists them
+// via GET /api/icons (the browser can't enumerate a folder itself, so the
+// panel needs the local server). Picking one arms the svgicon tool; each
+// canvas click stamps a plain image element with the SVG embedded as a
+// data URL, so saved drawings stay self-contained.
+
+let svgIcons = null;            // { category: [filename, …] } once fetched
+let currentSvgIcon = null;      // { path, dataUrl, ratio } armed for stamping
+const svgIconCache = new Map(); // path -> { dataUrl, ratio }
+const SVG_GRID_MAX = 300;       // cap the DOM; search narrows the rest
+
+function svgIconUrl(path) {
+  return 'icons/' + path.split('/').map(encodeURIComponent).join('/');
+}
+
+function svgToDataUrl(text) {
+  return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(text)));
+}
+
+// Mono icons (drawn only in black, like most general/tech-logo glyphs) are
+// marked mono:true when placed and accept the Fill color: retinting rewrites
+// every explicit fill/stroke in the SVG source and re-encodes the data URL,
+// so the color travels with the element and stays undoable.
+function isMonoSvg(text) {
+  if (/url\(#/i.test(text)) return false; // gradients / patterns
+  const ignored = new Set(['none', 'transparent', 'inherit', 'currentcolor']);
+  const black = /^(#000(000)?|black|rgba?\(\s*0\s*,\s*0\s*,\s*0\s*(,\s*[\d.]+\s*)?\))$/;
+  for (const m of text.matchAll(/\b(?:fill|stroke)\s*[:=]\s*["']?\s*([^"';<>)\s][^"';<>]*)/gi)) {
+    const c = m[1].trim().toLowerCase();
+    if (!ignored.has(c) && !black.test(c)) return false;
+  }
+  return true; // no explicit colors at all renders black too
+}
+
+function tintSvg(text, color) {
+  let s = text
+    .replace(/\b(fill|stroke)="(?!none")[^"]*"/gi, (_, a) => `${a}="${color}"`)
+    .replace(/\b(fill|stroke)='(?!none')[^']*'/gi, (_, a) => `${a}='${color}'`)
+    .replace(/\b(fill|stroke)\s*:\s*(?!none\b)[^;"'<}]+/gi, (_, a) => `${a}:${color}`);
+  // shapes without their own fill default to black — tint those via the root
+  if (!/<svg\b[^>]*\bfill\s*=/i.test(s)) s = s.replace(/<svg\b/i, `<svg fill="${color}"`);
+  return s;
+}
+
+function retintImageEl(el, color) {
+  const m = el.dataUrl.match(/^data:image\/svg\+xml;base64,(.*)$/);
+  if (!m) return;
+  const svg = decodeURIComponent(escape(atob(m[1])));
+  el.dataUrl = svgToDataUrl(tintSvg(svg, color));
+}
+
+async function ensureSvgIcons() {
+  if (svgIcons) return;
+  const r = await fetch('/api/icons');
+  if (!r.ok) throw new Error('server answered ' + r.status);
+  const data = await r.json();
+  if (!Object.keys(data).length) throw new Error('the icons/ folder is empty');
+  svgIcons = data;
+  const sel = document.getElementById('svgicon-category');
+  sel.innerHTML = '';
+  sel.appendChild(new Option('all categories', ''));
+  for (const cat of Object.keys(data)) {
+    sel.appendChild(new Option(`${cat} (${data[cat].length})`, cat));
+  }
+}
+
+function buildSvgIconGrid() {
+  const grid = document.getElementById('svgicon-grid');
+  const cat = document.getElementById('svgicon-category').value;
+  const q = document.getElementById('svgicon-search').value.trim().toLowerCase();
+  grid.innerHTML = '';
+
+  const matches = [];
+  for (const [c, files] of Object.entries(svgIcons)) {
+    if (cat && c !== cat) continue;
+    for (const f of files) {
+      if (!q || f.toLowerCase().includes(q)) matches.push(c + '/' + f);
+    }
+  }
+  document.getElementById('svgicon-count').textContent =
+    matches.length > SVG_GRID_MAX ? `(${SVG_GRID_MAX} of ${matches.length})` : `(${matches.length})`;
+
+  for (const path of matches.slice(0, SVG_GRID_MAX)) {
+    const btn = document.createElement('button');
+    const img = document.createElement('img');
+    img.loading = 'lazy';
+    img.src = svgIconUrl(path);
+    img.alt = '';
+    btn.appendChild(img);
+    btn.title = path.slice(path.indexOf('/') + 1, -4); // name without category/.svg
+    if (currentSvgIcon && currentSvgIcon.path === path) btn.classList.add('active');
+    btn.addEventListener('click', () => pickSvgIcon(path, btn));
+    grid.appendChild(btn);
+  }
+}
+
+async function pickSvgIcon(path, btn) {
+  document.querySelectorAll('#svgicon-grid button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  setTool('svgicon');
+  try {
+    let entry = svgIconCache.get(path);
+    if (!entry) {
+      const r = await fetch(svgIconUrl(path));
+      if (!r.ok) throw new Error('server answered ' + r.status);
+      const text = await r.text();
+      const dataUrl = svgToDataUrl(text);
+      const img = await loadImage(dataUrl);
+      // some SVGs have no intrinsic size — fall back to square
+      const ratio = img.naturalWidth && img.naturalHeight ? img.naturalHeight / img.naturalWidth : 1;
+      entry = { dataUrl, ratio, mono: isMonoSvg(text) };
+      svgIconCache.set(path, entry);
+    }
+    currentSvgIcon = { path, ...entry };
+  } catch (err) {
+    currentSvgIcon = null;
+    alert('Could not load icon: ' + err.message);
+  }
+}
+
+// Like the font-icon panel: visible only with its tool, and the category /
+// search / grid controls appear only once the library list has loaded.
+function updateSvgIconPanel() {
+  const panel = document.getElementById('svgicon-panel');
+  panel.classList.toggle('hidden', tool !== 'svgicon');
+  if (tool !== 'svgicon') return;
+  const setControls = ok => {
+    document.getElementById('svgicon-empty').classList.toggle('hidden', ok);
+    document.getElementById('svgicon-category').classList.toggle('hidden', !ok);
+    document.getElementById('svgicon-search').classList.toggle('hidden', !ok);
+    document.getElementById('svgicon-grid').classList.toggle('hidden', !ok);
+  };
+  if (svgIcons) { setControls(true); return; }
+  ensureSvgIcons()
+    .then(() => { setControls(true); buildSvgIconGrid(); })
+    .catch(err => {
+      setControls(false);
+      document.getElementById('svgicon-empty').textContent =
+        `Icon library unavailable (${err.message}) — it needs the icons/ folder and the local server: run node server.js, then open http://localhost:8123.`;
+    });
+}
+
+document.getElementById('svgicon-category').addEventListener('change', buildSvgIconGrid);
+document.getElementById('svgicon-search').addEventListener('input', buildSvgIconGrid);
 
 // -------------------------------------------------- drawing persistence
 //
@@ -1599,6 +1772,15 @@ async function quickSave() {
   }
 }
 document.getElementById('btn-quicksave').addEventListener('click', quickSave);
+
+// top-bar Save As (also Ctrl+Shift+S) — always asks for a name, so an open
+// drawing can be saved as a copy without overwriting the original
+async function saveAs() {
+  const name = prompt('Save drawing as:', currentName || '');
+  if (name == null) return;
+  await saveCurrent(name);
+}
+document.getElementById('btn-saveas').addEventListener('click', saveAs);
 
 // ------------------------------------------------- eraser.io share links
 //

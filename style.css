@@ -123,7 +123,7 @@ body {
 .line-style:hover { background: var(--bg); border-color: var(--accent); }
 .line-style.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 
-#icon-panel .hidden { display: none; }
+#icon-panel .hidden, #svgicon-panel .hidden { display: none; }
 
 .icon-empty { color: var(--muted); font-size: 12px; line-height: 1.5; }
 .icon-empty button {
@@ -136,7 +136,7 @@ body {
   font-size: inherit;
 }
 
-#icon-search {
+#icon-search, #svgicon-search, #svgicon-category {
   width: 100%;
   padding: 5px 8px;
   border: 1px solid var(--border);
@@ -165,6 +165,25 @@ body {
 }
 #icon-grid button:hover { border-color: var(--accent); background: var(--accent-soft); }
 #icon-grid button.active { border-color: var(--accent); background: var(--accent-soft); }
+
+#svgicon-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+#svgicon-grid button {
+  aspect-ratio: 1;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff; /* keep dark-stroke icons visible in the dark theme */
+  cursor: pointer;
+}
+#svgicon-grid button img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+#svgicon-grid button:hover { border-color: var(--accent); }
+#svgicon-grid button.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 
 /* ---------- Canvas ---------- */
 #canvas-wrap { flex: 1; position: relative; overflow: hidden; background: var(--bg); }
