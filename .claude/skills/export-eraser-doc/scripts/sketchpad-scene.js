@@ -5,18 +5,34 @@
 //
 // Element schema (must match drawing-app/app.js drawElement()):
 //   rect  {id, type:'rect',  x, y, w, h, stroke, fill, strokeWidth}
+//     (same box schema: ellipse, diamond, triangle, pentagon, hexagon, star)
 //   arrow {id, type:'arrow', x, y, x2, y2, stroke, strokeWidth}   (line: same)
 //   text  {id, type:'text',  x, y, text, fontSize, stroke}        (baseline top, 1.25 line height)
-// ids are unique positive integers; coordinates are world-space.
+// Stroked elements also take lineStyle ('solid'|'dashed'|'dotted') and
+// dashGap (px between dashes). ids are unique positive integers;
+// coordinates are world-space.
+
+const BOX_TYPES = ['rect', 'ellipse', 'diamond', 'triangle', 'pentagon', 'hexagon', 'star'];
 
 function createScene() {
   const els = [];
   let nextId = 1;
   const INK = '#1f2937';
 
+  // lineStyle/dashGap only when set, so plain scenes stay lean
+  function lineOpts(o) {
+    const out = {};
+    if (o.lineStyle && o.lineStyle !== 'solid') {
+      out.lineStyle = o.lineStyle;
+      if (o.dashGap) out.dashGap = o.dashGap;
+    }
+    return out;
+  }
+
   function rect(x, y, w, h, o = {}) {
-    els.push({ id: nextId++, type: 'rect', x, y, w, h,
-      stroke: o.stroke || INK, fill: o.fill || 'transparent', strokeWidth: o.strokeWidth || 2 });
+    els.push({ id: nextId++, type: o.shape || 'rect', x, y, w, h,
+      stroke: o.stroke || INK, fill: o.fill || 'transparent', strokeWidth: o.strokeWidth || 2,
+      ...lineOpts(o) });
   }
 
   function text(x, y, str, fontSize = 14, stroke = INK) {
@@ -24,15 +40,23 @@ function createScene() {
       strokeWidth: 2, fill: 'transparent' });
   }
 
-  // rect with a centered (possibly multi-line) label
-  function box(x, y, w, h, label, o = {}) {
-    rect(x, y, w, h, o);
+  // any box-bounded shape with a centered (possibly multi-line) label;
+  // type is one of BOX_TYPES
+  function shape(type, x, y, w, h, label, o = {}) {
+    rect(x, y, w, h, { ...o, shape: type });
+    if (!label) return;
     const fs = o.fontSize || 15;
     const lines = label.split('\n');
     const widest = Math.max(...lines.map(l => l.length)) * fs * 0.52; // sans-serif width estimate
     const totalH = lines.length * fs * 1.25;
     text(x + w / 2 - widest / 2, y + h / 2 - totalH / 2 + 2, label, fs, o.textStroke || o.stroke || INK);
   }
+
+  // node rect with a centered label
+  function box(x, y, w, h, label, o = {}) { shape('rect', x, y, w, h, label, o); }
+
+  // decision diamond with a centered label
+  function diamond(x, y, w, h, label, o = {}) { shape('diamond', x, y, w, h, label, { fontSize: 14, ...o }); }
 
   // container rect with a title in its top-left corner
   function group(x, y, w, h, title, o = {}) {
@@ -43,7 +67,7 @@ function createScene() {
   // arrow with an optional midpoint label; override label position with lx/ly
   function edge(x1, y1, x2, y2, label, o = {}) {
     els.push({ id: nextId++, type: 'arrow', x: x1, y: y1, x2, y2,
-      stroke: o.stroke || INK, strokeWidth: o.strokeWidth || 2 });
+      stroke: o.stroke || INK, strokeWidth: o.strokeWidth || 2, ...lineOpts(o) });
     if (label) {
       const fs = o.fontSize || 12;
       const lx = o.lx !== undefined ? o.lx : (x1 + x2) / 2 - (label.length * fs * 0.52) / 2;
@@ -70,7 +94,7 @@ function createScene() {
     const problems = [];
     if (new Set(els.map(e => e.id)).size !== els.length) problems.push('duplicate ids');
     for (const e of els) {
-      const nums = e.type === 'rect' ? [e.x, e.y, e.w, e.h]
+      const nums = BOX_TYPES.includes(e.type) ? [e.x, e.y, e.w, e.h]
         : (e.type === 'arrow' || e.type === 'line') ? [e.x, e.y, e.x2, e.y2]
         : e.type === 'text' ? [e.x, e.y, e.fontSize] : null;
       if (!nums || !nums.every(Number.isFinite)) problems.push(`bad element id=${e.id} type=${e.type}`);
@@ -85,7 +109,7 @@ function createScene() {
     return problems;
   }
 
-  return { rect, text, box, group, edge, save, validate, elements: els };
+  return { rect, text, box, shape, diamond, group, edge, save, validate, elements: els };
 }
 
 module.exports = { createScene };

@@ -23,6 +23,10 @@
       <button class="tool" data-tool="rect"    title="Rectangle (R)">▭</button>
       <button class="tool" data-tool="ellipse" title="Ellipse (O)">◯</button>
       <button class="tool" data-tool="diamond" title="Diamond (D)">◇</button>
+      <button class="tool" data-tool="triangle" title="Triangle (3)">△</button>
+      <button class="tool" data-tool="pentagon" title="Pentagon (5)">⬠</button>
+      <button class="tool" data-tool="hexagon"  title="Hexagon (6)">⬡</button>
+      <button class="tool" data-tool="star"     title="Star (S)">★</button>
       <button class="tool" data-tool="line"    title="Line (L)">─</button>
       <button class="tool" data-tool="arrow"   title="Arrow (A)">→</button>
       <button class="tool" data-tool="pen"     title="Freehand pen (P)">✎</button>
@@ -31,7 +35,7 @@
     </div>
 
     <div id="actions">
-      <button id="btn-load-ttf" title="Load an icon font (.ttf / .otf)">Load icon TTF</button>
+      <button id="btn-load-ttf" title="Load an icon font (.ttf / .otf) — add its IcoMoon selection.json to search icons by name">Load icon TTF</button>
       <button id="btn-drawings" title="Browse saved drawings">Drawings</button>
       <button id="btn-quicksave" title="Save to the drawings folder (Ctrl+S)">Save</button>
       <button id="btn-eraser" title="Import the preview image of an eraser.io share link (needs server.js)">Eraser link</button>
@@ -60,6 +64,16 @@
         <label>Stroke width
           <input type="range" id="prop-width" min="1" max="12" value="2">
         </label>
+        <label>Line style
+          <span class="line-style-row">
+            <button class="line-style active" data-style="solid"  title="Solid">─</button>
+            <button class="line-style" data-style="dashed" title="Dashed">┄</button>
+            <button class="line-style" data-style="dotted" title="Dotted">┈</button>
+          </span>
+        </label>
+        <label>Dash space
+          <input type="range" id="prop-dashgap" min="2" max="24" value="8">
+        </label>
         <label>Font size
           <input type="range" id="prop-fontsize" min="10" max="96" value="28">
         </label>
@@ -67,14 +81,17 @@
 
       <section class="panel hidden" id="icon-panel">
         <h3>Icons <span id="icon-count"></span></h3>
-        <input type="search" id="icon-search" placeholder="filter by hex, e.g. f0">
+        <p id="icon-empty" class="icon-empty hidden">No icon font loaded yet —
+          <button id="icon-load-link">load a .ttf</button>
+          (add its IcoMoon selection.json to search by name).</p>
+        <input type="search" id="icon-search" placeholder="filter by name or hex">
         <div id="icon-grid"></div>
       </section>
     </aside>
 
     <div id="canvas-wrap">
       <canvas id="canvas"></canvas>
-      <div id="hint">Scroll = zoom · Space/middle-drag = pan · Double-click = text · Del = delete · Ctrl+Z = undo</div>
+      <div id="hint">Scroll = zoom · Space/middle-drag = pan · Double-click = text · Hover a border = connect (Ctrl = pin a joint) · Del = delete · Ctrl+Z = undo</div>
     </div>
   </div>
 
@@ -120,7 +137,7 @@
     </div>
   </div>
 
-  <input type="file" id="file-ttf"  accept=".ttf,.otf" hidden>
+  <input type="file" id="file-ttf"  accept=".ttf,.otf,.json" multiple hidden>
   <input type="file" id="file-open" accept=".json"     hidden>
   <input type="file" id="file-image" accept="image/*"  hidden>
 </div>

@@ -108,6 +108,34 @@ body {
 .panel input[type="range"] { width: 100px; }
 .fill-row { display: flex; align-items: center; gap: 6px; }
 
+.line-style-row { display: flex; gap: 4px; }
+.line-style {
+  width: 32px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  cursor: pointer;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1;
+}
+.line-style:hover { background: var(--bg); border-color: var(--accent); }
+.line-style.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+
+#icon-panel .hidden { display: none; }
+
+.icon-empty { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.icon-empty button {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: inherit;
+}
+
 #icon-search {
   width: 100%;
   padding: 5px 8px;

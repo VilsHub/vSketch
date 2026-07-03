@@ -42,12 +42,16 @@ Write a generator script in the scratchpad directory that requires the scene
 builder shipped with this skill:
 
 ```js
-const { createScene } = require('/home/starlvil/Projects/.claude/skills/export-eraser-doc/scripts/sketchpad-scene.js');
+const { createScene } = require('/home/starlvil/Projects/drawing-app/.claude/skills/export-eraser-doc/scripts/sketchpad-scene.js');
 const s = createScene();
 // s.group(x,y,w,h,title,{stroke})            container with corner title
 // s.box(x,y,w,h,label,{stroke,fill,fontSize}) node rect + centered label ('\n' ok)
+// s.shape(type,x,y,w,h,label,{...})           same, for ellipse/diamond/triangle/
+//                                             pentagon/hexagon/star
+// s.diamond(x,y,w,h,label,{...})              decision-node shorthand
 // s.edge(x1,y1,x2,y2,label,{stroke,lx,ly})    arrow + optional label
 // s.rect / s.text                             raw elements
+// stroked helpers also take {lineStyle:'dashed'|'dotted', dashGap:<px>}
 const problems = s.validate();
 if (problems.length) throw new Error(problems.join('; '));
 console.log('elements:', s.save('<doc name>', '<output path>'));
@@ -75,8 +79,9 @@ Conversion rules — Eraser DSL → scene:
   auth vs notifications, etc.); keep node stroke colors loosely evoking the
   service (AWS orange `#f97316`, Postgres sky `#0ea5e9`, Kafka purple
   `#9333ea`, and neutral ink `#1f2937` elsewhere).
-- The app only draws solid lines — dashed Eraser connections become solid;
-  note this in the final report.
+- Dashed/dotted Eraser connections keep their style: pass
+  `lineStyle: 'dashed'` (or `'dotted'`) on the edge, tuning `dashGap` if the
+  default (8) looks off.
 
 ## 5. Save, validate, report
 
@@ -87,4 +92,4 @@ Conversion rules — Eraser DSL → scene:
   `drawing-app/` then the **Drawings** gallery at http://localhost:8123, or the
   **Open** button without the server. Mention that the gallery thumbnail stays
   blank until the user re-saves once in-app (Ctrl+S), and any fidelity caveats
-  (solid lines, auto-planned layout worth a visual once-over).
+  (auto-planned layout worth a visual once-over).

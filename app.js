@@ -24,7 +24,7 @@ let elements = [];                 // the scene
 let selection = new Set();         // ids of selected elements
 let tool = 'select';
 let camera = { x: 0, y: 0, zoom: 1 };
-const style = { stroke: '#1f2937', fill: 'transparent', strokeWidth: 2, fontSize: 28 };
+const style = { stroke: '#1f2937', fill: 'transparent', strokeWidth: 2, fontSize: 28, lineStyle: 'solid', dashGap: 8 };
 
 let iconFont = null;               // { family, dataB64, codepoints[] }
 let currentIcon = null;            // codepoint chosen in the icon grid
@@ -56,9 +56,14 @@ function normBox(x, y, w, h) {
 function getBBox(el) {
   switch (el.type) {
     case 'rect': case 'ellipse': case 'diamond': case 'image':
+    case 'triangle': case 'pentagon': case 'hexagon': case 'star':
       return normBox(el.x, el.y, el.w, el.h);
-    case 'line': case 'arrow':
-      return normBox(el.x, el.y, el.x2 - el.x, el.y2 - el.y);
+    case 'line': case 'arrow': {
+      const xs = [el.x, el.x2], ys = [el.y, el.y2];
+      for (const [px, py] of el.pts || []) { xs.push(px); ys.push(py); }
+      const minX = Math.min(...xs), minY = Math.min(...ys);
+      return { x: minX, y: minY, w: Math.max(...xs) - minX, h: Math.max(...ys) - minY };
+    }
     case 'pen': {
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       for (const [px, py] of el.points) {
@@ -100,7 +105,11 @@ function distToSegment(px, py, x1, y1, x2, y2) {
 function hitElement(el, x, y) {
   const pad = Math.max(6 / camera.zoom, el.strokeWidth || 0);
   if (el.type === 'line' || el.type === 'arrow') {
-    return distToSegment(x, y, el.x, el.y, el.x2, el.y2) <= pad;
+    const pts = [[el.x, el.y], ...(el.pts || []), [el.x2, el.y2]];
+    for (let i = 1; i < pts.length; i++) {
+      if (distToSegment(x, y, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]) <= pad) return true;
+    }
+    return false;
   }
   if (el.type === 'pen') {
     for (let i = 1; i < el.points.length; i++) {
@@ -172,6 +181,7 @@ function render() {
   ctx.restore();
 
   drawSelectionUI();
+  drawConnectUI();
   if (drag && drag.type === 'marquee') drawMarquee();
 
   // every state change repaints, so this is the one autosave hook needed
@@ -196,12 +206,42 @@ function drawGrid() {
   }
 }
 
+// Vertices of a box-bounded polygon shape, normalized to fill its bbox.
+function polygonPoints(type, b) {
+  let pts;
+  if (type === 'triangle') {
+    pts = [[0.5, 0], [1, 1], [0, 1]];
+  } else {
+    const n = type === 'pentagon' ? 5 : type === 'hexagon' ? 6 : 10; // star = 10 alternating
+    pts = [];
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+      const r = type === 'star' && i % 2 ? 0.45 : 1;
+      pts.push([Math.cos(a) * r, Math.sin(a) * r]);
+    }
+    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    pts = pts.map(([px, py]) => [(px - minX) / (maxX - minX), (py - minY) / (maxY - minY)]);
+  }
+  return pts.map(([px, py]) => [b.x + px * b.w, b.y + py * b.h]);
+}
+
+// setLineDash pattern for an element's lineStyle / dashGap.
+function dashPattern(el) {
+  const w = el.strokeWidth || 2, gap = el.dashGap || 8;
+  if (el.lineStyle === 'dashed') return [Math.max(6, w * 3), gap];
+  if (el.lineStyle === 'dotted') return [0.1, gap + w];
+  return [];
+}
+
 function drawElement(c, el) {
   c.strokeStyle = el.stroke || '#1f2937';
   c.fillStyle = el.fill || 'transparent';
   c.lineWidth = el.strokeWidth || 2;
   c.lineJoin = 'round';
   c.lineCap = 'round';
+  c.setLineDash(dashPattern(el));
 
   const hasFill = el.fill && el.fill !== 'transparent';
 
@@ -235,14 +275,36 @@ function drawElement(c, el) {
       c.stroke();
       break;
     }
+    case 'triangle': case 'pentagon': case 'hexagon': case 'star': {
+      const b = normBox(el.x, el.y, el.w, el.h);
+      const pts = polygonPoints(el.type, b);
+      c.beginPath();
+      c.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
+      c.closePath();
+      if (hasFill) c.fill();
+      c.stroke();
+      break;
+    }
     case 'line':
     case 'arrow': {
+      // straight segments through the joints; each joint is rounded with
+      // an arc so the curve lives only where two segments meet
+      const pts = [[el.x, el.y], ...(el.pts || []), [el.x2, el.y2]];
       c.beginPath();
-      c.moveTo(el.x, el.y);
+      c.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length - 1; i++) {
+        const [px, py] = pts[i - 1], [jx, jy] = pts[i], [nx, ny] = pts[i + 1];
+        const r = Math.min(24, Math.hypot(jx - px, jy - py) / 2, Math.hypot(nx - jx, ny - jy) / 2);
+        c.arcTo(jx, jy, nx, ny, r);
+      }
       c.lineTo(el.x2, el.y2);
       c.stroke();
       if (el.type === 'arrow') {
-        const angle = Math.atan2(el.y2 - el.y, el.x2 - el.x);
+        c.setLineDash([]); // head stays solid whatever the shaft style
+        // aim the head along the final straight segment
+        const from = pts[pts.length - 2];
+        const angle = Math.atan2(el.y2 - from[1], el.x2 - from[0]);
         const len = 8 + (el.strokeWidth || 2) * 2;
         c.beginPath();
         for (const side of [-1, 1]) {
@@ -311,6 +373,8 @@ function drawElement(c, el) {
       break;
     }
   }
+
+  c.setLineDash([]); // don't leak the dash into selection UI / next element
 }
 
 // Decoded bitmaps for image elements, keyed by their data URL so
@@ -393,12 +457,131 @@ function drawMarquee() {
   ctx.strokeRect(r.x, r.y, r.w, r.h);
 }
 
+// ------------------------------------------------------------ connectors
+//
+// Hovering near a shape's border (select tool) reveals a source point;
+// dragging from it draws an arrow. Near another shape's border the end
+// snaps to an acceptor point — release (or click, in sticky mode) there
+// to connect. Releasing over nothing keeps the line following the mouse
+// ("sticky") until an acceptor is clicked or a double-click ends it in
+// place; Escape cancels. Holding Ctrl bends the connector into a curve
+// that follows the mouse trail.
+
+const CONNECT_TYPES = new Set([
+  'rect', 'ellipse', 'diamond', 'triangle', 'pentagon', 'hexagon', 'star',
+  'image', 'text', 'icon',
+]);
+const ANCHOR_RADIUS = 8; // screen px within which border points appear
+
+let hoverAnchor = null;  // {el, x, y} — border point under the idle cursor
+
+// Nearest point on a bbox perimeter (works from inside and outside).
+function nearestBorderPoint(b, px, py) {
+  const cx = Math.min(Math.max(px, b.x), b.x + b.w);
+  const cy = Math.min(Math.max(py, b.y), b.y + b.h);
+  if (cx !== px || cy !== py) return { x: cx, y: cy }; // outside: clamp = border
+  const dl = px - b.x, dr = b.x + b.w - px, dt = py - b.y, db = b.y + b.h - py;
+  const m = Math.min(dl, dr, dt, db);
+  if (m === dl) return { x: b.x, y: py };
+  if (m === dr) return { x: b.x + b.w, y: py };
+  if (m === dt) return { x: px, y: b.y };
+  return { x: px, y: b.y + b.h };
+}
+
+// Topmost connectable element whose border is near p, or null.
+function findAnchor(p, excludeEl) {
+  const maxD = ANCHOR_RADIUS / camera.zoom;
+  for (let i = elements.length - 1; i >= 0; i--) {
+    const el = elements[i];
+    if (el === excludeEl || !CONNECT_TYPES.has(el.type)) continue;
+    const q = nearestBorderPoint(getBBox(el), p.x, p.y);
+    if (Math.hypot(p.x - q.x, p.y - q.y) <= maxD) return { el, x: q.x, y: q.y };
+  }
+  return null;
+}
+
+// A binding pins a connector endpoint to a spot on another element's
+// border, stored as that element's id plus the spot in bbox-normalized
+// coordinates — so it survives moves and scales sensibly on resize.
+function makeBind(target, x, y) {
+  const b = getBBox(target);
+  return {
+    id: target.id,
+    tx: b.w ? (x - b.x) / b.w : 0.5,
+    ty: b.h ? (y - b.y) / b.h : 0.5,
+  };
+}
+
+// Re-route every bound connector endpoint from its target's current bbox.
+// Bindings whose target is gone are dropped (the connector stays put).
+function syncConnectors() {
+  const byId = new Map(elements.map(el => [el.id, el]));
+  for (const el of elements) {
+    if (el.type !== 'line' && el.type !== 'arrow') continue;
+    if (!el.startBind && !el.endBind) continue;
+    const before = { x: el.x, y: el.y, x2: el.x2, y2: el.y2 };
+    for (const [key, px, py] of [['startBind', 'x', 'y'], ['endBind', 'x2', 'y2']]) {
+      const bind = el[key];
+      if (!bind) continue;
+      const target = byId.get(bind.id);
+      if (!target || !CONNECT_TYPES.has(target.type)) { delete el[key]; continue; }
+      const b = getBBox(target);
+      el[px] = b.x + bind.tx * b.w;
+      el[py] = b.y + bind.ty * b.h;
+    }
+    if (el.pts && el.pts.length) { // carry the joints along with the endpoints
+      const dx = ((el.x - before.x) + (el.x2 - before.x2)) / 2;
+      const dy = ((el.y - before.y) + (el.y2 - before.y2)) / 2;
+      for (const pt of el.pts) { pt[0] += dx; pt[1] += dy; }
+    }
+  }
+}
+
+function finishConnect() {
+  if (drag.acceptor) drag.el.endBind = makeBind(drag.acceptor.el, drag.acceptor.x, drag.acceptor.y);
+  const el = drag.el;
+  if (Math.hypot(el.x2 - el.x, el.y2 - el.y) < 4) {
+    elements.pop(); // degenerate click — discard
+    history.pop();
+  } else {
+    selection = new Set([el.id]);
+  }
+  drag = null;
+  render();
+}
+
+function cancelConnect() {
+  elements.pop();
+  history.pop();
+  drag = null;
+  render();
+}
+
+function drawConnectUI() {
+  const dot = (wx, wy, fill) => {
+    const s = worldToScreen(wx, wy);
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  };
+  if (!drag && hoverAnchor) dot(hoverAnchor.x, hoverAnchor.y, '#4f46e5');
+  if (drag && (drag.type === 'connect' || drag.type === 'endpoint') && drag.acceptor) {
+    dot(drag.acceptor.x, drag.acceptor.y, '#16a34a');
+  }
+}
+
 // -------------------------------------------------------- transformation
 
 function moveElement(el, dx, dy) {
   switch (el.type) {
     case 'line': case 'arrow':
-      el.x += dx; el.y += dy; el.x2 += dx; el.y2 += dy; break;
+      el.x += dx; el.y += dy; el.x2 += dx; el.y2 += dy;
+      if (el.pts) for (const pt of el.pts) { pt[0] += dx; pt[1] += dy; }
+      break;
     case 'pen':
       for (const p of el.points) { p[0] += dx; p[1] += dy; } break;
     default:
@@ -415,12 +598,14 @@ function transformElement(el, snap, oldBox, newBox) {
 
   switch (el.type) {
     case 'rect': case 'ellipse': case 'diamond': case 'image':
+    case 'triangle': case 'pentagon': case 'hexagon': case 'star':
       el.x = mapX(snap.x); el.y = mapY(snap.y);
       el.w = snap.w * sx;  el.h = snap.h * sy;
       break;
     case 'line': case 'arrow':
       el.x = mapX(snap.x);   el.y = mapY(snap.y);
       el.x2 = mapX(snap.x2); el.y2 = mapY(snap.y2);
+      if (snap.pts) el.pts = snap.pts.map(([px, py]) => [mapX(px), mapY(py)]);
       break;
     case 'pen':
       el.points = snap.points.map(([px, py]) => [mapX(px), mapY(py)]);
@@ -440,6 +625,13 @@ function transformElement(el, snap, oldBox, newBox) {
 
 canvas.addEventListener('pointerdown', e => {
   if (editingEl) return; // textarea overlay handles its own commit on blur
+
+  // sticky connector: a click on an acceptor commits, elsewhere keep drawing
+  if (drag && drag.type === 'connect') {
+    if (drag.acceptor && e.button === 0) finishConnect();
+    return;
+  }
+
   canvas.setPointerCapture(e.pointerId);
   const p = screenToWorld(e.offsetX, e.offsetY);
 
@@ -469,6 +661,24 @@ canvas.addEventListener('pointerdown', e => {
       }
     }
 
+    // border source point under the cursor? start drawing a connector
+    if (hoverAnchor) {
+      pushHistory();
+      const a = hoverAnchor;
+      const el = {
+        id: nextId++, type: 'arrow', x: a.x, y: a.y, x2: p.x, y2: p.y,
+        stroke: style.stroke, strokeWidth: style.strokeWidth,
+        lineStyle: style.lineStyle, dashGap: style.dashGap,
+        startBind: makeBind(a.el, a.x, a.y),
+      };
+      elements.push(el);
+      selection.clear();
+      hoverAnchor = null;
+      drag = { type: 'connect', el, sourceEl: a.el, cursor: { x: p.x, y: p.y }, acceptor: null, sticky: false };
+      render();
+      return;
+    }
+
     const hit = hitTest(p.x, p.y);
     if (hit) {
       if (e.shiftKey) {
@@ -492,7 +702,7 @@ canvas.addEventListener('pointerdown', e => {
 
   if (tool === 'pen') {
     pushHistory();
-    const el = { id: nextId++, type: 'pen', points: [[p.x, p.y]], stroke: style.stroke, strokeWidth: style.strokeWidth };
+    const el = { id: nextId++, type: 'pen', points: [[p.x, p.y]], stroke: style.stroke, strokeWidth: style.strokeWidth, lineStyle: style.lineStyle, dashGap: style.dashGap };
     elements.push(el);
     drag = { type: 'pen', el };
     return;
@@ -507,10 +717,7 @@ canvas.addEventListener('pointerdown', e => {
   }
 
   if (tool === 'icon') {
-    if (!iconFont || currentIcon == null) {
-      document.getElementById('file-ttf').click();
-      return;
-    }
+    if (!iconFont || currentIcon == null) return; // panel hint guides the user
     pushHistory();
     const size = Math.max(24, style.fontSize * 1.4);
     elements.push({
@@ -523,24 +730,41 @@ canvas.addEventListener('pointerdown', e => {
     return;
   }
 
-  // shape tools: rect / ellipse / diamond / line / arrow
+  // shape tools: rect / ellipse / diamond / triangle / pentagon / hexagon / star / line / arrow
   pushHistory();
   let el;
   if (tool === 'line' || tool === 'arrow') {
-    el = { id: nextId++, type: tool, x: p.x, y: p.y, x2: p.x, y2: p.y, stroke: style.stroke, strokeWidth: style.strokeWidth };
+    el = { id: nextId++, type: tool, x: p.x, y: p.y, x2: p.x, y2: p.y, stroke: style.stroke, strokeWidth: style.strokeWidth, lineStyle: style.lineStyle, dashGap: style.dashGap };
   } else {
-    el = { id: nextId++, type: tool, x: p.x, y: p.y, w: 0, h: 0, stroke: style.stroke, fill: style.fill, strokeWidth: style.strokeWidth };
+    el = { id: nextId++, type: tool, x: p.x, y: p.y, w: 0, h: 0, stroke: style.stroke, fill: style.fill, strokeWidth: style.strokeWidth, lineStyle: style.lineStyle, dashGap: style.dashGap };
   }
   elements.push(el);
   drag = { type: 'create', el, start: p };
 });
 
 canvas.addEventListener('pointermove', e => {
-  updateCursor(e);
-  if (!drag) return;
   const p = screenToWorld(e.offsetX, e.offsetY);
 
+  // idle in select mode: surface a connection source point near a border
+  if (!drag && tool === 'select' && !editingEl && !spaceDown) {
+    const a = findAnchor(p, null);
+    const changed = !!a !== !!hoverAnchor ||
+      (a && hoverAnchor && (a.x !== hoverAnchor.x || a.y !== hoverAnchor.y));
+    hoverAnchor = a;
+    if (changed) render();
+  }
+
+  updateCursor(e);
+  if (!drag) return;
+
   switch (drag.type) {
+    case 'connect': {
+      drag.cursor = p; // where Ctrl would pin the next joint
+      drag.acceptor = findAnchor(p, drag.sourceEl);
+      drag.el.x2 = drag.acceptor ? drag.acceptor.x : p.x;
+      drag.el.y2 = drag.acceptor ? drag.acceptor.y : p.y;
+      break;
+    }
     case 'pan':
       camera.x = drag.startCam.x - (e.offsetX - drag.startScreen.x) / camera.zoom;
       camera.y = drag.startCam.y - (e.offsetY - drag.startScreen.y) / camera.zoom;
@@ -555,6 +779,7 @@ canvas.addEventListener('pointermove', e => {
         Object.assign(el, JSON.parse(JSON.stringify(snap)));
         moveElement(el, dx, dy);
       }
+      syncConnectors();
       break;
     }
 
@@ -571,15 +796,21 @@ canvas.addEventListener('pointermove', e => {
       const newBox = normBox(anchor.x, anchor.y, p.x - anchor.x, p.y - anchor.y);
       if (newBox.w > 1 && newBox.h > 1) {
         transformElement(drag.el, drag.snap, b, newBox);
+        syncConnectors();
       }
       break;
     }
 
-    case 'endpoint':
+    case 'endpoint': {
       drag.moved = true;
-      if (drag.handle === 'start') { drag.el.x = p.x; drag.el.y = p.y; }
-      else { drag.el.x2 = p.x; drag.el.y2 = p.y; }
+      // endpoints snap to borders and re-bind there; elsewhere they detach
+      drag.acceptor = findAnchor(p, null);
+      const nx = drag.acceptor ? drag.acceptor.x : p.x;
+      const ny = drag.acceptor ? drag.acceptor.y : p.y;
+      if (drag.handle === 'start') { drag.el.x = nx; drag.el.y = ny; }
+      else { drag.el.x2 = nx; drag.el.y2 = ny; }
       break;
+    }
 
     case 'marquee': {
       drag.current = p;
@@ -604,6 +835,18 @@ canvas.addEventListener('pointermove', e => {
 
 canvas.addEventListener('pointerup', () => {
   if (!drag) return;
+
+  if (drag.type === 'connect') {
+    if (drag.acceptor) finishConnect();
+    else drag.sticky = true; // keep following the mouse until committed
+    return;
+  }
+
+  if (drag.type === 'endpoint' && drag.moved) {
+    const key = drag.handle === 'start' ? 'startBind' : 'endBind';
+    if (drag.acceptor) drag.el[key] = makeBind(drag.acceptor.el, drag.acceptor.x, drag.acceptor.y);
+    else delete drag.el[key];
+  }
 
   if (drag.type === 'create') {
     const el = drag.el;
@@ -634,6 +877,7 @@ canvas.addEventListener('pointerup', () => {
 
 canvas.addEventListener('dblclick', e => {
   e.preventDefault();
+  if (drag && drag.type === 'connect') { finishConnect(); return; } // end in place
   const p = screenToWorld(e.offsetX, e.offsetY);
   const hit = hitTest(p.x, p.y);
   if (hit && hit.type === 'text') startEditing(hit);
@@ -656,7 +900,9 @@ canvas.addEventListener('wheel', e => {
 
 function updateCursor(e) {
   if (spaceDown || tool === 'pan' || (drag && drag.type === 'pan')) { canvas.style.cursor = 'grab'; return; }
+  if (drag && drag.type === 'connect') { canvas.style.cursor = 'crosshair'; return; }
   if (tool === 'select') {
+    if (hoverAnchor) { canvas.style.cursor = 'crosshair'; return; }
     const sel = selectedElements();
     if (sel.length === 1) {
       for (const h of getHandles(sel[0])) {
@@ -749,6 +995,16 @@ function startEditing(el, isNew = false) {
 window.addEventListener('keydown', e => {
   if (editingEl || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
+  // while drawing a connector: Ctrl pins a joint (segments stay straight,
+  // the curve lives at the joint), Escape cancels, everything else is off
+  if (drag && drag.type === 'connect') {
+    if (e.key === 'Control' && !e.repeat) {
+      (drag.el.pts ||= []).push([drag.cursor.x, drag.cursor.y]);
+      render();
+    }
+    if (e.key !== 'Escape') return;
+  }
+
   if (e.code === 'Space') { spaceDown = true; canvas.style.cursor = 'grab'; e.preventDefault(); return; }
 
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
@@ -766,12 +1022,23 @@ window.addEventListener('keydown', e => {
     e.preventDefault();
     if (!selection.size) return;
     pushHistory();
+    const idMap = new Map(); // original id -> copy id
     const copies = selectedElements().map(el => {
       const copy = JSON.parse(JSON.stringify(el));
       copy.id = nextId++;
+      idMap.set(el.id, copy.id);
       moveElement(copy, 16, 16);
       return copy;
     });
+    // keep bindings within the duplicated set; drop ones pointing outside,
+    // so offset copies don't snap back onto the originals
+    for (const copy of copies) {
+      for (const key of ['startBind', 'endBind']) {
+        if (!copy[key]) continue;
+        if (idMap.has(copy[key].id)) copy[key].id = idMap.get(copy[key].id);
+        else delete copy[key];
+      }
+    }
     elements.push(...copies);
     selection = new Set(copies.map(c => c.id));
     render();
@@ -789,10 +1056,12 @@ window.addEventListener('keydown', e => {
     pushHistory();
     elements = elements.filter(el => !selection.has(el.id));
     selection.clear();
+    syncConnectors(); // drop bindings that pointed at deleted elements
     render();
     return;
   }
   if (e.key === 'Escape') {
+    if (drag && drag.type === 'connect') { cancelConnect(); return; }
     if (!gallery.classList.contains('hidden')) { closeGallery(); return; }
     if (!exportDialog.classList.contains('hidden')) { closeExportDialog(); return; }
     selection.clear();
@@ -801,7 +1070,11 @@ window.addEventListener('keydown', e => {
     return;
   }
 
-  const shortcuts = { v: 'select', h: 'pan', r: 'rect', o: 'ellipse', d: 'diamond', l: 'line', a: 'arrow', p: 'pen', t: 'text' };
+  const shortcuts = {
+    v: 'select', h: 'pan', r: 'rect', o: 'ellipse', d: 'diamond',
+    '3': 'triangle', '5': 'pentagon', '6': 'hexagon', s: 'star',
+    l: 'line', a: 'arrow', p: 'pen', t: 'text',
+  };
   const t = shortcuts[e.key.toLowerCase()];
   if (t && !e.ctrlKey && !e.metaKey) setTool(t);
 });
@@ -816,15 +1089,27 @@ function setTool(t) {
   tool = t;
   document.querySelectorAll('#toolbar .tool').forEach(btn =>
     btn.classList.toggle('active', btn.dataset.tool === t));
+  updateIconPanel();
+  if (hoverAnchor) { hoverAnchor = null; render(); }
 }
 
+// The icon panel lives only with the icon tool: hidden otherwise, and it
+// shows a load-a-font hint instead of the grid until a font is loaded.
+function updateIconPanel() {
+  const panel = document.getElementById('icon-panel');
+  panel.classList.toggle('hidden', tool !== 'icon');
+  if (tool !== 'icon') return;
+  const hasFont = !!iconFont;
+  document.getElementById('icon-empty').classList.toggle('hidden', hasFont);
+  document.getElementById('icon-search').classList.toggle('hidden', !hasFont);
+  document.getElementById('icon-grid').classList.toggle('hidden', !hasFont);
+}
+
+document.getElementById('icon-load-link').addEventListener('click', () =>
+  document.getElementById('file-ttf').click());
+
 document.querySelectorAll('#toolbar .tool').forEach(btn => {
-  btn.addEventListener('click', () => {
-    if (btn.dataset.tool === 'icon' && !iconFont) {
-      document.getElementById('file-ttf').click();
-    }
-    setTool(btn.dataset.tool);
-  });
+  btn.addEventListener('click', () => setTool(btn.dataset.tool));
 });
 
 // style inputs: update defaults and restyle current selection
@@ -848,6 +1133,17 @@ document.getElementById('prop-fill-on').addEventListener('change', e => {
 document.getElementById('prop-fill').addEventListener('input', e => {
   style.fill = e.target.value;
   applyStyleToSelection(el => { if ('fill' in el) el.fill = style.fill; });
+});
+document.querySelectorAll('.line-style').forEach(btn => {
+  btn.addEventListener('click', () => {
+    style.lineStyle = btn.dataset.style;
+    document.querySelectorAll('.line-style').forEach(b => b.classList.toggle('active', b === btn));
+    applyStyleToSelection(el => { if ('strokeWidth' in el && el.type !== 'text' && el.type !== 'icon') el.lineStyle = style.lineStyle; });
+  });
+});
+document.getElementById('prop-dashgap').addEventListener('input', e => {
+  style.dashGap = +e.target.value;
+  applyStyleToSelection(el => { if ('lineStyle' in el) el.dashGap = style.dashGap; });
 });
 document.getElementById('prop-width').addEventListener('input', e => {
   style.strokeWidth = +e.target.value;
@@ -912,19 +1208,43 @@ document.getElementById('btn-load-ttf').addEventListener('click', () =>
   document.getElementById('file-ttf').click());
 
 document.getElementById('file-ttf').addEventListener('change', async e => {
-  const file = e.target.files[0];
+  const files = [...e.target.files];
   e.target.value = '';
-  if (!file) return;
+  if (!files.length) return;
+  const fontFile = files.find(f => /\.(ttf|otf)$/i.test(f.name));
+  const jsonFile = files.find(f => /\.json$/i.test(f.name));
   try {
-    await loadIconFont(await file.arrayBuffer());
+    if (fontFile) await loadIconFont(await fontFile.arrayBuffer());
+    if (jsonFile) {
+      if (!iconFont) throw new Error('load the icon font (.ttf) first, then its selection.json');
+      applySelectionJson(JSON.parse(await jsonFile.text()));
+    }
     setTool('icon');
   } catch (err) {
     alert('Could not load font: ' + err.message);
   }
 });
 
+// IcoMoon selection.json: icons[].properties.{name, code} plus search tags.
+// Fills the names map for fonts whose post table carries no glyph names.
+function applySelectionJson(data) {
+  if (!Array.isArray(data.icons)) throw new Error('not an IcoMoon selection.json');
+  let applied = 0;
+  for (const entry of data.icons) {
+    const p = entry.properties || {};
+    if (!p.code || !p.name) continue;
+    const tags = (entry.icon && entry.icon.tags) || [];
+    const name = [...new Set([p.name, ...tags])].join(' ');
+    iconFont.names.set(p.code, name);
+    iconFont.extraNames.set(p.code, name);
+    applied++;
+  }
+  if (!applied) throw new Error('no icon names found in selection.json');
+  buildIconGrid(document.getElementById('icon-search').value.trim());
+}
+
 async function loadIconFont(buffer) {
-  const codepoints = parseCmapCodepoints(buffer);
+  const { codepoints, names } = parseIconFont(buffer);
   if (!codepoints.length) throw new Error('no glyphs found in cmap');
 
   // Unique family name per load so the browser never serves a stale font.
@@ -933,7 +1253,7 @@ async function loadIconFont(buffer) {
   await face.load();
   document.fonts.add(face);
 
-  iconFont = { family, dataB64: bufferToBase64(buffer), codepoints };
+  iconFont = { family, dataB64: bufferToBase64(buffer), codepoints, names, extraNames: new Map() };
   currentIcon = codepoints[0]; // pre-select so the icon tool works immediately
   document.documentElement.style.setProperty('--icon-font', `"${family}"`);
   buildIconGrid();
@@ -941,19 +1261,25 @@ async function loadIconFont(buffer) {
 }
 
 function buildIconGrid(filter = '') {
-  const panel = document.getElementById('icon-panel');
   const grid = document.getElementById('icon-grid');
-  panel.classList.remove('hidden');
+  updateIconPanel(); // swap the load hint for the grid once a font exists
   grid.innerHTML = '';
 
-  const shown = iconFont.codepoints.filter(cp =>
-    !filter || cp.toString(16).includes(filter.toLowerCase()));
+  // match glyph names when the font has them (post v2), hex always
+  const q = filter.toLowerCase();
+  const shown = iconFont.codepoints.filter(cp => {
+    if (!q) return true;
+    const name = iconFont.names.get(cp);
+    return (name && name.toLowerCase().includes(q)) || cp.toString(16).includes(q);
+  });
   document.getElementById('icon-count').textContent = `(${shown.length})`;
 
   for (const cp of shown) {
     const btn = document.createElement('button');
     btn.textContent = String.fromCodePoint(cp);
-    btn.title = 'U+' + cp.toString(16).toUpperCase().padStart(4, '0');
+    const hex = 'U+' + cp.toString(16).toUpperCase().padStart(4, '0');
+    const name = iconFont.names.get(cp);
+    btn.title = name ? `${name} — ${hex}` : hex;
     if (cp === currentIcon) btn.classList.add('active');
     btn.addEventListener('click', () => {
       currentIcon = cp;
@@ -994,6 +1320,15 @@ function base64ToBuffer(b64) {
 
 let currentName = null; // name of the drawing being edited, if saved
 
+// Embeddable form of the loaded icon font. Names applied from a
+// selection.json ride along, since they can't be re-derived from the font.
+function serializeIconFont() {
+  if (!iconFont) return null;
+  const out = { family: iconFont.family, dataB64: iconFont.dataB64 };
+  if (iconFont.extraNames.size) out.names = Object.fromEntries(iconFont.extraNames);
+  return out;
+}
+
 function serializeDrawing(name) {
   return {
     version: 1,
@@ -1002,7 +1337,7 @@ function serializeDrawing(name) {
     thumbnail: makeThumbnail(),
     elements,
     // embed the icon font so the drawing is self-contained
-    iconFont: iconFont ? { family: iconFont.family, dataB64: iconFont.dataB64 } : null,
+    iconFont: serializeIconFont(),
   };
 }
 
@@ -1039,7 +1374,11 @@ async function loadDrawingData(data) {
     const face = new FontFace(data.iconFont.family, buffer);
     await face.load();
     document.fonts.add(face);
-    iconFont = { family: data.iconFont.family, dataB64: data.iconFont.dataB64, codepoints: parseCmapCodepoints(buffer) };
+    const { codepoints, names } = parseIconFont(buffer);
+    // re-apply names that came from a selection.json (not derivable from the font)
+    const extraNames = new Map(Object.entries(data.iconFont.names || {}).map(([cp, n]) => [+cp, n]));
+    for (const [cp, n] of extraNames) names.set(cp, n);
+    iconFont = { family: data.iconFont.family, dataB64: data.iconFont.dataB64, codepoints, names, extraNames };
     document.documentElement.style.setProperty('--icon-font', `"${data.iconFont.family}"`);
     buildIconGrid();
   }
@@ -1537,7 +1876,7 @@ function saveSession() {
     if (!elements.length) { localStorage.removeItem(SESSION_KEY); return; }
     localStorage.setItem(SESSION_KEY, JSON.stringify({
       elements, camera, currentName,
-      iconFont: iconFont ? { family: iconFont.family, dataB64: iconFont.dataB64 } : null,
+      iconFont: serializeIconFont(),
     }));
   } catch { /* quota exceeded — skip */ }
 }
