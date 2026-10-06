@@ -21,12 +21,17 @@ recipe for this machine (system Chromium won't launch; use
 
 ## Files
 
-- `app.js` — the entire frontend (~1900 lines), organized in `// ---- section`
-  banner comments: state, geometry, history, rendering, connectors,
-  transformation, pointer, text UI, keyboard, UI, theme, icon font TTF,
-  SVG icon library, drawing persistence, gallery modal, eraser.io share
-  links, image import, import/export JSON, PNG export, session autosave,
-  init. Find a feature by grepping for its banner.
+- `app.js` — the app around the drawing surface (~900 lines, an ES module),
+  organized in `// ---- section` banner comments: state, UI, theme, icon
+  font TTF, SVG icon library, drawing persistence, gallery modal, eraser.io
+  share links, image import, import/export JSON, PNG export, session
+  autosave, init. Find a feature by grepping for its banner.
+- `lib/vUX` — relative symlink to `../../../Libraries/vUX`. The drawing
+  surface itself is vUX's `SketchPad` (`lib/vUX/vUX-sketchPad.js`): scene,
+  rendering, selection, connectors, text editing, undo/redo, pan/zoom and the
+  editing shortcuts. **Editing it edits the vUX repo**, and My Invitees uses
+  the same module; see `Libraries/vUX/doc/sketch-pad.md`. `index.html` boots
+  vUX with `data-id="vUX" data-library-root="lib/vUX"` on the app.js tag.
 - `server.js` — zero-dependency static-file server + REST API
   (`GET/PUT/DELETE /api/drawings/<name>` → JSON files in `drawings/`) +
   `GET /api/icons` (lists `icons/` for the place-icon panel) +
@@ -41,30 +46,35 @@ recipe for this machine (system Chromium won't launch; use
 - `guides/draw-curves.md` — user-facing doc for the connector/curve UX.
 - `drawings/` — one `.json` file per saved drawing; created on first server run.
 - `icons/` — stock SVG icons, one folder per category (aws, azure, …), from
-  Eraser's public icon set. The svgicon tool stamps them as image elements
+  Eraser's public icon set. The pad's stamp tool places them as image elements
   with the SVG embedded as a data URL; browsing them needs the server.
 
-## Architecture (app.js)
+## Architecture
 
-1. **Scene as data.** The whole drawing is `elements`, a flat array of plain
-   JSON objects (`{id, type, x, y, …}`). Undo/redo, save, export, and
-   autosave all operate on this array; undo is `JSON.stringify(elements)`
-   snapshots. Any state change should call the history/repaint helpers
-   rather than mutating silently — every repaint also schedules the
-   localStorage session autosave.
+1. **The surface is a vUX component.** `const pad = new SketchPad(wrap)` in
+   app.js, configured (`keyboardScope: 'document'`, the tool shortcut map,
+   callbacks) and started with `pad.initialize()` at the very end of the
+   file — its callbacks touch state declared further down. Everything the
+   app does to the drawing goes through the pad's API: `pad.tool`,
+   `pad.setStyle()`, `pad.load()`, `pad.elements`, `pad.insertImage()`,
+   `pad.exportCanvas()`, `pad.icon` / `pad.stamp`, `pad.zoomBy()`. Engine
+   behaviour (a new shape, a new drag kind, hit-testing, undo) belongs in
+   `vUX-sketchPad.js`, not here.
 
-2. **Camera transform.** Elements store world coordinates;
-   `camera = {x, y, zoom}` plus `screenToWorld`/`worldToScreen` convert to
-   and from mouse pixels.
+2. **Scene as data.** The drawing is `pad.elements`, a flat array of plain
+   JSON objects (`{id, type, x, y, …}`); the getter returns a deep copy.
+   Undo is JSON snapshots inside the pad. Every repaint fires the pad's
+   `change` callback, which schedules the localStorage session autosave.
 
-3. **Immediate-mode rendering.** `render()` clears and redraws everything on
-   every change. No dirty-tracking or scene graph.
+3. **App keys vs pad keys.** The pad handles editing keys and tool
+   shortcuts on `window` and ignores keys typed into inputs. app.js adds a
+   capture-phase `keydown` for Ctrl+S / Ctrl+Shift+S and for Escape closing
+   a dialog — it calls `stopPropagation()` so that Escape doesn't also
+   clear the selection.
 
-4. **Interaction state machine.** One `drag` object describes the pointer
-   interaction in progress (`pan`, `move`, `resize`, `marquee`, `create`,
-   `pen`, `endpoint`, …). `pointerdown` decides which, `pointermove`
-   executes, `pointerup` finalizes. New interactions should be new `drag`
-   kinds, not parallel event handlers.
+4. **Dark theme** inverts `#canvas-wrap` with a CSS filter;
+   `pad.counterInvertImages = true` pre-inverts image elements so photos
+   keep their colors. Exports are never inverted.
 
 5. **Pluggable persistence.** A saved drawing is one JSON document
    (`{version, name, savedAt, thumbnail, elements, iconFont}`). Two backends
@@ -73,8 +83,8 @@ recipe for this machine (system Chromium won't launch; use
    the save flow must work through both.
 
 6. **Connectors** are arrows bound to element borders (they re-anchor when
-   shapes move) — see the connectors section in app.js and
-   `guides/draw-curves.md` for the intended behavior.
+   shapes move) — implemented in the pad; `guides/draw-curves.md` describes
+   the intended behavior.
 
 7. **Icon fonts**: user picks a `.ttf`/`.otf`; `ttf.js` enumerates its
    codepoints, the `FontFace` API registers it, and placed icons are

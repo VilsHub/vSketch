@@ -28,9 +28,16 @@ LD_LIBRARY_PATH=$PWD/libs/extracted/usr/lib/x86_64-linux-gnu node <driver>.js
 
 ## Gotchas when driving app.js
 
-- Top-level `let` state (`elements`, `camera`, `iconFont`) is reachable from
-  `page.evaluate()` — assert on it directly.
-- Drawing: keyboard shortcut (`r`, `a`, `t`…) then mouse down/move/up on `#canvas`.
+- app.js is an ES module, so its top-level state is not on `window`. It
+  exposes the drawing surface as `window.sketchpad` (the vUX SketchPad):
+  assert on `sketchpad.elements`, `.selection`, `.tool`, `.camera`, `.zoom`.
+- Drawing: keyboard shortcut (`r`, `a`, `t`…) then mouse down/move/up on
+  `#canvas-wrap canvas` (the pad creates the canvas; there is no `#canvas`).
+- Keys go nowhere while focus is in a sidebar input (the pad ignores keys
+  typed into inputs) — click the canvas before pressing Ctrl+D, Delete, etc.
+- If `npm i playwright` pulls a newer version than the cached browser, pass
+  `executablePath` pointing at the `~/.cache/ms-playwright/chromium_headless_shell-*`
+  build that exists.
 - Session autosave debounces 800 ms after any `render()`; `beforeunload` flushes
   it — so reloading always persists the live scene. To test startup with a
   planted localStorage value, use `context.addInitScript()`, not `evaluate()`

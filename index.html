@@ -32,11 +32,12 @@
       <button class="tool" data-tool="pen"     title="Freehand pen (P)">✎</button>
       <button class="tool" data-tool="text"    title="Text (T)">T</button>
       <button class="tool" data-tool="icon"    title="Font icon — load a .ttf first">☆</button>
-      <button class="tool" data-tool="svgicon" title="Place icon — stock SVG library (I)">☁&#xFE0E;</button>
+      <button class="tool" data-tool="stamp" title="Place icon — stock SVG library (I)">☁&#xFE0E;</button>
     </div>
 
     <div id="actions">
       <button id="btn-load-ttf" title="Load an icon font (.ttf / .otf) — add its IcoMoon selection.json to search icons by name">Load icon TTF</button>
+      <button id="btn-new" title="Start a new blank drawing">New</button>
       <button id="btn-drawings" title="Browse saved drawings">Drawings</button>
       <button id="btn-quicksave" title="Save to the drawings folder (Ctrl+S)">Save</button>
       <button id="btn-saveas" title="Save under a new name (Ctrl+Shift+S)">Save As</button>
@@ -100,7 +101,7 @@
     </aside>
 
     <div id="canvas-wrap">
-      <canvas id="canvas"></canvas>
+      <!-- vUX SketchPad adds its <canvas> here -->
       <div id="hint">Scroll = zoom · Space/middle-drag = pan · Double-click = text · Hover a border = connect (Ctrl = pin a joint) · Del = delete · Ctrl+Z = undo</div>
     </div>
   </div>
@@ -153,6 +154,6 @@
 </div>
 
 <script src="ttf.js"></script>
-<script src="app.js"></script>
+<script type="module" src="app.js" data-id="vUX" data-library-root="lib/vUX"></script>
 </body>
 </html>

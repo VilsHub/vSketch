@@ -187,7 +187,6 @@ body {
 
 /* ---------- Canvas ---------- */
 #canvas-wrap { flex: 1; position: relative; overflow: hidden; background: var(--bg); }
-#canvas { position: absolute; inset: 0; touch-action: none; }
 
 /* Dark theme inverts the whole drawing surface (excalidraw-style) instead of
    remapping element colors: dark ink becomes light, white fills become dark,
@@ -208,20 +207,12 @@ body {
   font-size: 11px;
   pointer-events: none;
   white-space: nowrap;
+  z-index: 1; /* above the pad's canvas, which is added after it */
 }
 
-/* in-place text editor overlay */
-.text-editor {
-  position: absolute;
-  border: 1px dashed var(--accent);
-  outline: none;
-  background: transparent;
-  resize: none;
-  overflow: hidden;
-  padding: 0;
-  line-height: 1.25;
-  font-family: sans-serif;
-}
+/* in-place text editor overlay: vUX SketchPad styles it inline; the app
+   only themes its border */
+.vSketchPad-editor { border-color: var(--accent) !important; }
 
 /* ---------- Zoom bar ---------- */
 #zoombar {
