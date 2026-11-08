@@ -1,4 +1,4 @@
-# Sketchpad
+# vSketch
 
 A small eraser.io-style whiteboard built with **vanilla HTML + Canvas 2D + JavaScript** — no dependencies, no build step. Made for learning how drawing apps work.
 

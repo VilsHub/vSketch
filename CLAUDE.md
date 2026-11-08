@@ -2,6 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**vSketch** (renamed from sketch-app / "Sketchpad" on 2026-11-08). Repo: `github.com/VilsHub/vSketch`,
+checked out at `Apps/vSketch`. The `SketchPad` in the code is the vUX component, not the app's name.
+
 ## Running
 
 No dependencies, no build step, no test suite — vanilla HTML + Canvas 2D + JS.

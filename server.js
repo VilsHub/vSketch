@@ -94,7 +94,7 @@ const server = http.createServer((req, res) => {
     const m = share.match(/^https:\/\/app\.eraser\.io\/workspace\/([A-Za-z0-9_-]+)/);
     if (!m) return send(res, 400, '{"error":"not an app.eraser.io workspace link"}');
     const id = m[1];
-    const headers = { 'User-Agent': 'Mozilla/5.0 (Sketchpad importer)' };
+    const headers = { 'User-Agent': 'Mozilla/5.0 (vSketch importer)' };
 
     (async () => {
       const page = await fetch(`https://app.eraser.io/workspace/${id}`, { headers });
@@ -163,6 +163,6 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Sketchpad running at http://localhost:${PORT}`);
+  console.log(`vSketch running at http://localhost:${PORT}`);
   console.log(`Drawings are saved to ${DRAWINGS_DIR}`);
 });

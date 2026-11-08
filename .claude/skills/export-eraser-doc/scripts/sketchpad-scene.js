@@ -1,9 +1,9 @@
-// Sketchpad scene builder for the export-eraser-doc skill.
+// vSketch scene builder for the export-eraser-doc skill.
 // require() this from a generator script, describe the scene with the
-// helpers, then save(). Produces a document loadable by drawing-app
+// helpers, then save(). Produces a document loadable by vSketch
 // (Open button or drawings/ gallery).
 //
-// Element schema (must match drawing-app/app.js drawElement()):
+// Element schema (must match vSketch/app.js drawElement()):
 //   rect  {id, type:'rect',  x, y, w, h, stroke, fill, strokeWidth}
 //     (same box schema: ellipse, diamond, triangle, pentagon, hexagon, star)
 //   arrow {id, type:'arrow', x, y, x2, y2, stroke, strokeWidth}   (line: same)

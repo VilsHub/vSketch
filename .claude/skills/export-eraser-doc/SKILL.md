@@ -1,11 +1,11 @@
 ---
 name: export-eraser-doc
-description: Convert an Eraser document's diagrams into sketch-app's (Sketchpad's) native JSON scene format and save it into sketch-app/drawings/. Requires the eraser MCP server to be connected (signed in via /mcp) first. Invoke as /export-eraser-doc <name of Eraser doc>.
+description: Convert an Eraser document's diagrams into vSketch's native JSON scene format and save it into vSketch/drawings/. Requires the eraser MCP server to be connected (signed in via /mcp) first. Invoke as /export-eraser-doc <name of Eraser doc>.
 argument-hint: <name of Eraser doc>
 ---
 
-Convert the Eraser document named `$ARGUMENTS` into a Sketchpad drawing document
-saved at `sketch-app/drawings/<kebab-cased-name>.json`, made of native editable
+Convert the Eraser document named `$ARGUMENTS` into a vSketch drawing document
+saved at `vSketch/drawings/<kebab-cased-name>.json`, made of native editable
 shapes (not a bitmap).
 
 ## 1. Precondition: Eraser MCP signed in
@@ -36,13 +36,13 @@ authenticating with eraser. Do not attempt any workaround.
 - If the file has several diagrams, convert all of them into one scene spaced
   apart horizontally, unless the user named a specific one.
 
-## 4. Convert to a Sketchpad scene
+## 4. Convert to a vSketch scene
 
 Write a generator script in the scratchpad directory that requires the scene
 builder shipped with this skill:
 
 ```js
-const { createScene } = require('/home/starlvil/Projects/sketch-app/.claude/skills/export-eraser-doc/scripts/sketchpad-scene.js');
+const { createScene } = require('/home/starlvil/Projects/VilsHub/Apps/vSketch/.claude/skills/export-eraser-doc/scripts/sketchpad-scene.js');
 const s = createScene();
 // s.group(x,y,w,h,title,{stroke})            container with corner title
 // s.box(x,y,w,h,label,{stroke,fill,fontSize}) node rect + centered label ('\n' ok)
@@ -57,9 +57,9 @@ if (problems.length) throw new Error(problems.join('; '));
 console.log('elements:', s.save('<doc name>', '<output path>'));
 ```
 
-The builder emits the exact element schema `sketch-app/app.js` renders — do
+The builder emits the exact element schema `vSketch/app.js` renders — do
 not hand-write element objects, and do not modify the builder to add element
-types the app lacks. If `sketch-app/app.js` has changed its schema (check when
+types the app lacks. If `vSketch/app.js` has changed its schema (check when
 something looks off), update `scripts/sketchpad-scene.js` to match first.
 
 Conversion rules — Eraser DSL → scene:
@@ -85,11 +85,11 @@ Conversion rules — Eraser DSL → scene:
 
 ## 5. Save, validate, report
 
-- Output path: `sketch-app/drawings/<kebab-cased doc name>.json` (`mkdir -p`
+- Output path: `vSketch/drawings/<kebab-cased doc name>.json` (`mkdir -p`
   the folder). If the file already exists, ask before overwriting.
 - Run the generator; `validate()` must return no problems.
 - Report: output path, element count, and how to open it — `node server.js` in
-  `sketch-app/` then the **Drawings** gallery at http://localhost:8123, or the
+  `vSketch/` then the **Drawings** gallery at http://localhost:8123, or the
   **Open** button without the server. Mention that the gallery thumbnail stays
   blank until the user re-saves once in-app (Ctrl+S), and any fidelity caveats
   (auto-planned layout worth a visual once-over).

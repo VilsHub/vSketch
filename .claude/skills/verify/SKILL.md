@@ -1,14 +1,14 @@
 ---
 name: verify
-description: How to build, launch, and drive drawing-app (Sketchpad) to verify changes end-to-end in a headless browser.
+description: How to build, launch, and drive vSketch to verify changes end-to-end in a headless browser.
 ---
 
-# Verifying drawing-app
+# Verifying vSketch
 
 No build step — vanilla HTML/JS. Launch:
 
 ```bash
-cd drawing-app && node server.js &   # serves app + drawings API on http://localhost:8123
+cd Apps/vSketch && node server.js &   # serves app + drawings API on http://localhost:8123
 ```
 
 ## Driving the GUI headlessly

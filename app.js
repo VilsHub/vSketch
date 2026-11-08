@@ -1,5 +1,5 @@
 /**
- * Sketchpad — a small eraser.io-style whiteboard.
+ * vSketch: a small eraser.io-style whiteboard.
  *
  * Architecture:
  *  - The drawing surface is vUX's SketchPad component (lib/vUX/vUX-sketchPad.js):
